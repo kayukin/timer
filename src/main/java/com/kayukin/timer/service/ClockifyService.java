@@ -10,7 +10,6 @@ import retrofit2.Call;
 import retrofit2.Response;
 
 import java.io.IOException;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -44,14 +43,19 @@ public class ClockifyService {
     }
 
     public void resumePausedTimers() {
-        pausedTimers.forEach(timeEntry -> {
-            String description = timeEntry.getDescription();
-            AddTimeEntryRequest request = new AddTimeEntryRequest();
-            request.setDescription(description);
-            request.setStart(LocalDateTime.now(Clock.systemUTC()));
-            execute(clockifyClient.addTimer(workspace, request));
-        });
+        pausedTimers.stream()
+                .map(this::convertToRequest)
+                .map(request -> clockifyClient.addTimer(workspace, request))
+                .forEach(this::execute);
         pausedTimers.clear();
+    }
+
+    private AddTimeEntryRequest convertToRequest(TimeEntry timeEntry) {
+        return new AddTimeEntryRequest(
+                LocalDateTime.now(ZoneOffset.UTC),
+                timeEntry.getDescription(),
+                timeEntry.getProjectId(),
+                timeEntry.getBillable());
     }
 
     private StopTimeEntryRequest createStopRequest() {
