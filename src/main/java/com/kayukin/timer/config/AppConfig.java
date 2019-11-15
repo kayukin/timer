@@ -1,9 +1,10 @@
 package com.kayukin.timer.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kayukin.timer.service.ClockifyClient;
-import com.kayukin.timer.service.ClockifyService;
 import com.kayukin.timer.service.DBusHandler;
+import com.kayukin.timer.toggl.converter.StartRequestConverter;
+import com.kayukin.timer.toggl.service.TogglClient;
+import com.kayukin.timer.toggl.service.TogglService;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.logging.HttpLoggingInterceptor;
@@ -17,10 +18,13 @@ import org.springframework.context.annotation.Configuration;
 import retrofit2.Retrofit;
 import retrofit2.converter.jackson.JacksonConverterFactory;
 
+import static okhttp3.Credentials.basic;
+
 @Configuration
 public class AppConfig {
-    private static final String X_API_KEY = "X-Api-Key";
-    private static final String API_CLOCKIFY = "https://api.clockify.me/";
+    private static final String API_TOGGL = "https://www.toggl.com/";
+    private static final String AUTHORIZATION = "Authorization";
+    private static final String API_TOKEN = "api_token";
 
     @Bean
     public DBusConnection dBusConnection(DBusSigHandler<ScreenSaver.ActiveChanged> handler) throws DBusException {
@@ -30,35 +34,40 @@ public class AppConfig {
     }
 
     @Bean
-    public DBusSigHandler<ScreenSaver.ActiveChanged> handler(ClockifyService clockifyService) {
-        return new DBusHandler(clockifyService);
+    public DBusSigHandler<ScreenSaver.ActiveChanged> handler(TogglService togglService) {
+        return new DBusHandler(togglService);
     }
 
     @Bean
-    public ClockifyService clockifyService(ClockifyClient clockifyClient) {
-        return new ClockifyService(clockifyClient);
+    public TogglService togglService(TogglClient togglClient, StartRequestConverter requestConverter) {
+        return new TogglService(togglClient, requestConverter);
     }
 
     @Bean
-    public ClockifyClient clockifyClient(ObjectMapper objectMapper,
-                                         @Value("${clockify.api-key}") String apiKey) {
+    public StartRequestConverter requestConverter() {
+        return new StartRequestConverter();
+    }
+
+    @Bean
+    public TogglClient togglClient(ObjectMapper objectMapper,
+                                   @Value("${toggl.api-key}") String apiKey) {
         HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
         interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
         OkHttpClient client = new OkHttpClient.Builder()
                 .addInterceptor(chain -> {
                     Request request = chain.request().newBuilder()
-                            .addHeader(X_API_KEY, apiKey)
+                            .addHeader(AUTHORIZATION, basic(apiKey, API_TOKEN))
                             .build();
                     return chain.proceed(request);
                 })
-                //.addInterceptor(interceptor)
+                .addInterceptor(interceptor)
                 .build();
 
         return new Retrofit.Builder()
-                .baseUrl(API_CLOCKIFY)
+                .baseUrl(API_TOGGL)
                 .addConverterFactory(JacksonConverterFactory.create(objectMapper))
                 .client(client)
                 .build()
-                .create(ClockifyClient.class);
+                .create(TogglClient.class);
     }
 }
